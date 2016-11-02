@@ -63,10 +63,7 @@ test_data.force_array  = set_array( { phone1 = "123456789",phone2 = "987654321" 
 test_data.force_object = set_array( { "USA","UK","CH" },false )
 
 local buffer = bson.encode( test_data )
-print( string.len(buffer),buffer )
+print( string.len(buffer) )
 
--- local result = Json.encode_to_file( test_data,"test.json",true )
--- local decode_result = Json.decode_from_file("test.json")
-
--- local decode_result = Json.decode( json_str,false ) -- no comment
--- vd( decode_result )
+local tbl = bson.decode( buffer )
+vd( tbl )

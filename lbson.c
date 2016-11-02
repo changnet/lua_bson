@@ -6,7 +6,7 @@
 
 #define MAX_LUA_STACK   1024
 #define MAX_KEY_LENGTH  64
-#define MAX_ARRAY_INDEX 10240
+#define MAX_ARRAY_INDEX INT_MAX
 #define ARRAY_KEY       "__array"
 
 #define ERROR(ector,...)    \
@@ -109,7 +109,7 @@ int value_encode( lua_State *L,bson_t *doc,
         {
             if ( lua_isinteger( L,index ) )
             {
-                /* 有可能是int，也可能是int64 */
+                /* int32 or int64 */
                 int64_t val = lua_tointeger( L,index );
                 if ( lua_isbit32( val ) )
                     BSON_APPEND_INT32( doc,key,val );
@@ -278,36 +278,214 @@ bson_t *lbs_do_encode( lua_State *L,
     return doc;
 }
 
+
+/* decode a bson document into a lua table,push the table into stack
+ * https://docs.mongodb.org/v3.0/reference/bson-types/
+ * {
+ * BSON_TYPE_EOD           = 0x00,
+ * BSON_TYPE_DOUBLE        = 0x01,
+ * BSON_TYPE_UTF8          = 0x02,
+ * BSON_TYPE_DOCUMENT      = 0x03,
+ * BSON_TYPE_ARRAY         = 0x04,
+ * BSON_TYPE_BINARY        = 0x05,
+ * BSON_TYPE_UNDEFINED     = 0x06,
+ * BSON_TYPE_OID           = 0x07,
+ * BSON_TYPE_BOOL          = 0x08,
+ * BSON_TYPE_DATE_TIME     = 0x09,
+ * BSON_TYPE_NULL          = 0x0A,
+ * BSON_TYPE_REGEX         = 0x0B,
+ * BSON_TYPE_DBPOINTER     = 0x0C,
+ * BSON_TYPE_CODE          = 0x0D,
+ * BSON_TYPE_SYMBOL        = 0x0E,
+ * BSON_TYPE_CODEWSCOPE    = 0x0F,
+ * BSON_TYPE_INT32         = 0x10,
+ * BSON_TYPE_TIMESTAMP     = 0x11,
+ * BSON_TYPE_INT64         = 0x12,
+ * BSON_TYPE_MAXKEY        = 0x7F,
+ * BSON_TYPE_MINKEY        = 0xFF,
+ * } bson_type_t;
+*/
+int bson_decode( lua_State*L,bson_iter_t *iter,struct error_collector *ec )
+{
+    if ( lua_gettop(L) > MAX_LUA_STACK || !lua_checkstack(L,3) )
+    {
+        ERROR( ec,"bson_decode stack overflow" );
+        return -1;
+    }
+
+    int root_type = bson_iter_type( iter );
+
+    lua_newtable( L );
+    while ( bson_iter_next( iter ) )
+    {
+        const char *key = bson_iter_key( iter );
+        switch ( bson_iter_type( iter ) )
+        {
+            case BSON_TYPE_DOUBLE    :
+            {
+                double val = bson_iter_double( iter );
+                lua_pushnumber( L,val );
+            }break;
+            case BSON_TYPE_DOCUMENT  :
+            {
+                bson_iter_t sub_iter;
+                if ( !bson_iter_recurse( iter, &sub_iter ) )
+                {
+                    ERROR( ec,"bson document iter recurse error" );
+                    lua_pop( L,1 );return -1;
+                }
+                if ( bson_decode( L,&sub_iter,ec ) < 0 )
+                {
+                    lua_pop( L,1 );return -1;
+                }
+            }break;
+            case BSON_TYPE_ARRAY     :
+            {
+                bson_iter_t sub_iter;
+                if ( !bson_iter_recurse( iter, &sub_iter ) )
+                {
+                    ERROR( ec,"bson array iter recurse error" );
+                    lua_pop( L,1 );return -1;
+                }
+                if ( bson_decode( L,&sub_iter,ec ) < 0 )
+                {
+                    lua_pop( L,1 );return -1;
+                }
+            }break;
+            case BSON_TYPE_BINARY    :
+            {
+                const char *val  = NULL;
+                unsigned int len = 0;
+                bson_iter_binary( iter,NULL,&len,(const uint8_t **)(&val) );
+                lua_pushlstring( L,val,len );
+            }break;
+            case BSON_TYPE_UTF8      :
+            {
+                unsigned int len = 0;
+                const char *val = bson_iter_utf8( iter,&len );
+                lua_pushlstring( L,val,len );
+            }break;
+            case BSON_TYPE_OID       :
+            {
+                const bson_oid_t *oid = bson_iter_oid ( iter );
+
+                char str[25];  /* bson api make it 25 */
+                bson_oid_to_string( oid, str );
+                lua_pushstring( L,str );
+            }break;
+            case BSON_TYPE_BOOL      :
+            {
+                bool val = bson_iter_bool( iter );
+                lua_pushboolean( L,val );
+            }break;
+            case BSON_TYPE_NULL      :
+                /* NULL == nil in lua */
+                continue;
+                break;
+            case BSON_TYPE_INT32     :
+            {
+                int val = bson_iter_int32( iter );
+                lua_pushinteger( L,val );
+            }break;
+            case BSON_TYPE_DATE_TIME :
+            {
+                /* A 64-bit integer containing the number of milliseconds since
+                 * the UNIX epoch
+                 */
+                int64_t val = bson_iter_date_time( iter );
+                lua_pushinteger( L,val );
+            }break;
+            case BSON_TYPE_INT64     :
+            {
+                int64_t val = bson_iter_int64( iter );
+                lua_pushinteger( L,val );
+            }break;
+            default :
+            {
+                ERROR( ec,"unknow bson type:%d",bson_iter_type( iter ) );
+                lua_pop( L,1 );return -1;
+            }break;
+        }
+
+        if ( BSON_TYPE_ARRAY == root_type )
+        {
+            /* lua array index start from 1
+             * lua_rawseti:Array Manipulation
+             */
+            lua_rawseti( L,-2,strtol(key,NULL,10) + 1 );
+        }
+        else
+        {
+            /* no lua_rawsetfield ?? */
+            lua_setfield( L,-2,key );
+        }
+    }
+
+    return 0;
+}
+
+
+int lbs_do_decode( lua_State *L,
+    const char *buffer,size_t sz,struct error_collector *ec )
+{
+    bson_reader_t *reader = bson_reader_new_from_data( (const uint8_t *)buffer,sz );
+
+    const bson_t *doc = bson_reader_read( reader,NULL );
+    if ( !doc )
+    {
+        ERROR( ec,"invalid bson buffer" );
+
+        bson_reader_destroy( reader );
+        return -1;
+    }
+
+    bson_iter_t iter;
+    if ( !bson_iter_init( &iter, doc ) )
+    {
+        ERROR( ec,"invalid bson document" );
+
+        bson_reader_destroy( reader );return -1;
+    }
+
+    int rs = bson_decode( L,&iter,ec );
+
+    /* bson_reader_t is designed to read a sequence of BSON Documents
+     * but here we always decode one document
+     */
+    bson_reader_destroy( reader );
+
+    return rs;
+}
+
 /* encode lua table into a bson buffer */
 static int lbs_encode( lua_State *L )
 {
     struct error_collector ec;
     ec.what[0] = 0;
 
-    int success = false;
+    int success = 0;
     int nothrow = lua_toboolean( L,2 );
 
     if ( !lua_istable( L,1 ) )
     {
         snprintf( ec.what,LBS_MAX_ERROR_MSG,"argument #1 table expected,got %s",
                     lua_typename( L,lua_type(L,1) ) );
-        lua_pushnil( L );
+        lua_pushnil( L ); /* fail,make sure buffer is nil */
     }
     else
     {
-        const bson_t *doc = lbs_do_encode( L,1,NULL,&ec );
+        bson_t *doc = lbs_do_encode( L,1,NULL,&ec );
         if ( doc )
         {
             const char *buffer = (const char *)bson_get_data( doc );
             lua_pushlstring( L,buffer,doc->len );
 
-            success = true;
-            return 1;
+            bson_destroy( doc );
+            success = 1;
+            return    1;
         }
-        else
-        {
-            lua_pushnil( L );
-        }
+
+        lua_pushnil( L ); /* fail,make sure buffer is nil */
     }
 
     if ( !success )
@@ -319,9 +497,40 @@ static int lbs_encode( lua_State *L )
     return 2;
 }
 
+/* decode a bson buffer into a lua table */
 static int lbs_decode( lua_State *L )
 {
-    return 0;
+    struct error_collector ec;
+    ec.what[0] = 0;
+
+    int success = false;
+    int nothrow = lua_toboolean( L,2 );
+    if ( !lua_isstring( L,1 ) )
+    {
+        snprintf( ec.what,LBS_MAX_ERROR_MSG,"argument #1 string expected,got %s",
+                    lua_typename( L,lua_type(L,1) ) );
+        lua_pushnil( L );
+    }
+    else
+    {
+        size_t sz = 0;
+        const char *buffer = luaL_tolstring( L,1,&sz );
+
+        if ( lbs_do_decode( L,buffer,sz,&ec ) >= 0 )
+        {
+            return 1;
+        }
+
+        lua_pushnil( L ); /* fail,make sure buffer is nil */
+    }
+
+    if ( !success )
+    {
+        if ( nothrow ) lua_pushstring( L,ec.what );
+        else luaL_error( L,ec.what );
+    }
+
+    return 2;
 }
 
 /* ====================LIBRARY INITIALISATION FUNCTION======================= */

@@ -4,6 +4,9 @@ TARGET_SO =         lua_bson.so
 TARGET_A  =         liblua_bson.a
 PREFIX =            /usr/local
 CFLAGS =            -g3 -Wall -pedantic -fno-inline
+
+# libbson link with pthread,you need to load pthread library before debug
+# LD_PRELOAD=/lib/x86_64-linux-gnu/libpthread.so.0 gdb -args lua test.lua
 #CFLAGS =            -O3 -Wall -pedantic -DNDEBUG
 LUA_BSON_CFLAGS =      -fpic -I/usr/local/include/libbson-1.0
 LUA_BSON_LDFLAGS =     -shared -lbson-1.0
