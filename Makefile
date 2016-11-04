@@ -8,13 +8,17 @@ CFLAGS =            -g3 -Wall -pedantic -fno-inline
 # libbson link with pthread,you need to load pthread library before debug
 # LD_PRELOAD=/lib/x86_64-linux-gnu/libpthread.so.0 gdb -args lua test.lua
 #CFLAGS =            -O3 -Wall -pedantic -DNDEBUG
-LUA_BSON_CFLAGS =      -fpic -I/usr/local/include/libbson-1.0
-LUA_BSON_LDFLAGS =     -shared -lbson-1.0
+LUA_BSON_CFLAGS =      -fpic
+LUA_BSON_LDFLAGS =     -shared $(LIBRARY_DEPS)
 LUA_INCLUDE_DIR =   $(PREFIX)/include
+
+INCLUDE_DEPS = -I/usr/local/include/libbson-1.0 -I$(LUA_INCLUDE_DIR)
+LIBRARY_DEPS = -lbson-1.0
+
 AR= ar rcu
 RANLIB= ranlib
 
-BUILD_CFLAGS =      -I$(LUA_INCLUDE_DIR) $(LUA_BSON_CFLAGS)
+BUILD_CFLAGS =      $(INCLUDE_DEPS) $(LUA_BSON_CFLAGS)
 OBJS =              lbson.o
 
 .PHONY: all clean test
@@ -32,6 +36,8 @@ $(TARGET_A): $(OBJS)
 	$(RANLIB) $@
 
 test:
+	gcc -o writer writer.c $(INCLUDE_DEPS) $(LIBRARY_DEPS)
+	./writer
 	lua test.lua
 
 clean:

@@ -305,7 +305,8 @@ bson_t *lbs_do_encode( lua_State *L,
  * BSON_TYPE_MINKEY        = 0xFF,
  * } bson_type_t;
 */
-int bson_decode( lua_State*L,bson_iter_t *iter,struct error_collector *ec )
+int bson_decode( lua_State*L,bson_iter_t *iter,
+    bson_type_t root_type,struct error_collector *ec )
 {
     if ( lua_gettop(L) > MAX_LUA_STACK || !lua_checkstack(L,3) )
     {
@@ -313,12 +314,11 @@ int bson_decode( lua_State*L,bson_iter_t *iter,struct error_collector *ec )
         return -1;
     }
 
-    int root_type = bson_iter_type( iter );
-
     lua_newtable( L );
     while ( bson_iter_next( iter ) )
     {
         const char *key = bson_iter_key( iter );
+        /* don't call bson_iter_type with root document */
         switch ( bson_iter_type( iter ) )
         {
             case BSON_TYPE_DOUBLE    :
@@ -334,7 +334,7 @@ int bson_decode( lua_State*L,bson_iter_t *iter,struct error_collector *ec )
                     ERROR( ec,"bson document iter recurse error" );
                     lua_pop( L,1 );return -1;
                 }
-                if ( bson_decode( L,&sub_iter,ec ) < 0 )
+                if ( bson_decode( L,&sub_iter,BSON_TYPE_DOCUMENT,ec ) < 0 )
                 {
                     lua_pop( L,1 );return -1;
                 }
@@ -347,7 +347,7 @@ int bson_decode( lua_State*L,bson_iter_t *iter,struct error_collector *ec )
                     ERROR( ec,"bson array iter recurse error" );
                     lua_pop( L,1 );return -1;
                 }
-                if ( bson_decode( L,&sub_iter,ec ) < 0 )
+                if ( bson_decode( L,&sub_iter,BSON_TYPE_ARRAY,ec ) < 0 )
                 {
                     lua_pop( L,1 );return -1;
                 }
@@ -447,7 +447,8 @@ int lbs_do_decode( lua_State *L,
         bson_reader_destroy( reader );return -1;
     }
 
-    int rs = bson_decode( L,&iter,ec );
+    /* root type always be a document in bson */
+    int rs = bson_decode( L,&iter,BSON_TYPE_DOCUMENT,ec );
 
     /* bson_reader_t is designed to read a sequence of BSON Documents
      * but here we always decode one document
@@ -533,14 +534,44 @@ static int lbs_decode( lua_State *L )
     return 2;
 }
 
+/* generate a objectid */
+static int lbs_object_id( lua_State *L )
+{
+    bson_oid_t oid;
+
+    bson_oid_init( &oid, NULL );
+
+    const int sz = 25;
+    char str[sz];
+
+    bson_oid_to_string( &oid, str );
+
+    lua_pushlstring( L,str,sz );
+
+    return 1;
+}
+
+/* encode a lua table into json string */
+// int lbs_json_encode( lua_State *L )
+// {
+//
+// }
+//
+// /* decode json string into a lua table */
+// int lbs_json_decode( lua_State *L )
+// {
+//
+// }
+
 /* ====================LIBRARY INITIALISATION FUNCTION======================= */
 
 static const luaL_Reg lua_parson_lib[] =
 {
     {"encode", lbs_encode},
     {"decode", lbs_decode},
-    // {"encode_to_file", encode_to_file},
-    // {"decode_from_file", decode_from_file},
+    {"object_id",lbs_object_id},
+    // {"json_encode", lbs_json_encode},
+    // {"json_decode", lbs_json_decode},
     {NULL, NULL}
 };
 

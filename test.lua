@@ -67,3 +67,10 @@ print( string.len(buffer) )
 
 local tbl = bson.decode( buffer )
 vd( tbl )
+
+local bf = io.open( "test.bson","rb" )
+local bf_buffer = bf:read( "a" ) -- some version maybe read("*all")
+
+vd( bson.decode(bf_buffer) )
+
+print( "a new object id:",bson.object_id() )
