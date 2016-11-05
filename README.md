@@ -1,5 +1,20 @@
 # lua_bson
-a bson encode/decode lua c module
+[![Build Status](https://travis-ci.org/changnet/lua_bson.svg?branch=master)](https://travis-ci.org/changnet/lua_bson)
+
+a bson encode/decode lua c module base on libbson.See more about libbson at
+https://github.com/mongodb/libbson
+
+Installation
+------------
+
+ * Make sure lua develop environment already installed
+ * git clone https://github.com/changnet/lua_bson.git
+ * cd lua_bson
+ * make
+ * make test
+ * Copy lua_parson.so to your lua project's c module directory
+
+or embed to your project
 
 Api
 ----
@@ -12,11 +27,16 @@ buffer,error = encode( tbl,nothrow )
 -- decode a bson buffer into a lua table
 tbl,error = decode( buffer,nothrow )
 
--- generate a objectid
-objectid = object_id
+-- generate a object id
+objectid = object_id()
 ```
 
 if success,error always be nil.
+
+Example
+-------
+
+See 'test.lua'  
 
 Note
 ----
