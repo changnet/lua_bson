@@ -36,7 +36,51 @@ if success,error always be nil.
 Example
 -------
 
-See 'test.lua'  
+See 'test.lua'. A bson binary buffer decode as a lua table,like:  
+
+```lua
+table: 0x6a1f80
+{
+    empty_array = table: 0x6a2280
+    {
+    }
+    empty_object = table: 0x6a22f0
+    {
+    }
+    sparse = table: 0x6a2380
+    {
+        10 = number ten
+    }
+    force_object = table: 0x6a2450
+    {
+        2 = UK
+        3 = CH
+        1 = USA
+    }
+    employees = table: 0x6a23c0
+    {
+        1 = table: 0x6a2400
+        {
+            firstName = Bill
+            lastName = Gates
+        }
+        2 = table: 0x6a2730
+        {
+            firstName = George
+            lastName = Bush
+        }
+        3 = table: 0x6a27c0
+        {
+            firstName = Thomas
+            lastName = Carter
+        }
+    }
+    force_array = table: 0x6a25b0
+    {
+        1 = 987654321
+    }
+}
+```
 
 Note
 ----
@@ -59,7 +103,7 @@ Note
 | 00                | type EOO ('end of object')          |
 | 00 ...            | padding,a bson doc at least 64bytes |
 
-* root document always be document
-* find a key need to iterate every key
+* root document always be document,can't be array.
+* find a key need to iterate every key.
 
 See more at http://bsonspec.org/faq.html
