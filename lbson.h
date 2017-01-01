@@ -3,18 +3,21 @@
 
 #define LBS_MAX_ERROR_MSG   256
 
-/* collect error info */
-struct error_collector
-{
-    char what[LBS_MAX_ERROR_MSG];
-};
+/* bson-compat.h:28,bson-macros.h:31 had include C++ stl
+ * so bson.h must outside of extern "C"
+ */
+#include <bson.h>
 
 #ifdef __cplusplus
 extern "C"
 {
 #endif
 
-#include <bson.h>
+/* collect error info */
+struct error_collector
+{
+    char what[LBS_MAX_ERROR_MSG];
+};
 
 #include <lua.h>
 #include <lualib.h>
