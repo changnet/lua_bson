@@ -426,7 +426,7 @@ int bson_decode( lua_State*L,bson_iter_t *iter,
 
 
 int lbs_do_decode( lua_State *L,
-    const bson_t *doc,struct error_collector *ec )
+    const bson_t *doc,bson_type_t root_type,struct error_collector *ec )
 {
     bson_iter_t iter;
     if ( !bson_iter_init( &iter, doc ) )
@@ -436,10 +436,7 @@ int lbs_do_decode( lua_State *L,
        return -1;
     }
 
-    /* root type always be a document in bson */
-    int rs = bson_decode( L,&iter,BSON_TYPE_DOCUMENT,ec );
-
-    return rs;
+    return bson_decode( L,&iter,root_type,ec );
 }
 
 /* encode lua table into a bson buffer */
@@ -511,7 +508,8 @@ static int lbs_decode( lua_State *L )
         goto ERROR;
     }
 
-    if ( lbs_do_decode( L,doc,&ec ) >= 0 )
+    /* root type always be a document in bson */
+    if ( lbs_do_decode( L,doc,BSON_TYPE_DOCUMENT,&ec ) >= 0 )
     {
         return 1;
     }

@@ -34,7 +34,7 @@ int main (int argc, char *argv[])
    }
 
    int w = fwrite( buf,1,buflen,f );
-   printf("%d byte write to file",w);
+   printf("%d byte write to file\n",w);
    fclose( f );
 
    bson_writer_destroy( writer );

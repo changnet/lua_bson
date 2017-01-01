@@ -63,7 +63,7 @@ test_data.force_array  = set_array( { phone1 = "123456789",phone2 = "987654321" 
 test_data.force_object = set_array( { "USA","UK","CH" },false )
 
 local buffer = bson.encode( test_data )
-print( string.len(buffer) )
+print( "test data length:",string.len(buffer) )
 
 local tbl = bson.decode( buffer )
 vd( tbl )
