@@ -426,34 +426,18 @@ int bson_decode( lua_State*L,bson_iter_t *iter,
 
 
 int lbs_do_decode( lua_State *L,
-    const char *buffer,size_t sz,struct error_collector *ec )
+    const bson_t *doc,struct error_collector *ec )
 {
-    bson_reader_t *reader = bson_reader_new_from_data( (const uint8_t *)buffer,sz );
-
-    const bson_t *doc = bson_reader_read( reader,NULL );
-    if ( !doc )
-    {
-        ERROR( ec,"invalid bson buffer" );
-
-        bson_reader_destroy( reader );
-        return -1;
-    }
-
     bson_iter_t iter;
     if ( !bson_iter_init( &iter, doc ) )
     {
         ERROR( ec,"invalid bson document" );
 
-        bson_reader_destroy( reader );return -1;
+       return -1;
     }
 
     /* root type always be a document in bson */
     int rs = bson_decode( L,&iter,BSON_TYPE_DOCUMENT,ec );
-
-    /* bson_reader_t is designed to read a sequence of BSON Documents
-     * but here we always decode one document
-     */
-    bson_reader_destroy( reader );
 
     return rs;
 }
@@ -504,32 +488,44 @@ static int lbs_decode( lua_State *L )
     struct error_collector ec;
     ec.what[0] = 0;
 
-    int success = false;
     int nothrow = lua_toboolean( L,2 );
     if ( !lua_isstring( L,1 ) )
     {
         snprintf( ec.what,LBS_MAX_ERROR_MSG,"argument #1 string expected,got %s",
                     lua_typename( L,lua_type(L,1) ) );
-        lua_pushnil( L );
+        goto ERROR;
     }
-    else
+
+    size_t sz = 0;
+    const char *buffer = luaL_tolstring( L,1,&sz );
+
+    bson_reader_t *reader = bson_reader_new_from_data( (const uint8_t *)buffer,sz );
+
+    const bson_t *doc = bson_reader_read( reader,NULL );
+
+    bson_reader_destroy( reader );
+    if ( !doc )
     {
-        size_t sz = 0;
-        const char *buffer = luaL_tolstring( L,1,&sz );
+        ERROR( (&ec),"invalid bson buffer" );
 
-        if ( lbs_do_decode( L,buffer,sz,&ec ) >= 0 )
-        {
-            return 1;
-        }
-
-        lua_pushnil( L ); /* fail,make sure buffer is nil */
+        goto ERROR;
     }
 
-    if ( !success )
+    if ( lbs_do_decode( L,doc,&ec ) >= 0 )
     {
-        if ( nothrow ) lua_pushstring( L,ec.what );
-        else luaL_error( L,ec.what );
+        return 1;
     }
+
+ERROR:
+    if ( !nothrow )
+    {
+        luaL_error( L,ec.what );
+        return 0; /* in fact,it never return */
+    }
+
+    /* do not raise a error,return error message instead */
+    lua_pushnil( L ); /* fail,make sure buffer is nil */
+    lua_pushstring( L,ec.what );
 
     return 2;
 }
@@ -551,18 +547,6 @@ static int lbs_object_id( lua_State *L )
     return 1;
 }
 
-/* encode a lua table into json string */
-// int lbs_json_encode( lua_State *L )
-// {
-//
-// }
-//
-// /* decode json string into a lua table */
-// int lbs_json_decode( lua_State *L )
-// {
-//
-// }
-
 /* ====================LIBRARY INITIALISATION FUNCTION======================= */
 
 static const luaL_Reg lua_parson_lib[] =
@@ -570,13 +554,12 @@ static const luaL_Reg lua_parson_lib[] =
     {"encode", lbs_encode},
     {"decode", lbs_decode},
     {"object_id",lbs_object_id},
-    // {"json_encode", lbs_json_encode},
-    // {"json_decode", lbs_json_decode},
     {NULL, NULL}
 };
 
 int luaopen_lua_bson(lua_State *L)
 {
+    luaL_checkversion( L );
     luaL_newlib(L, lua_parson_lib);
     return 1;
 }

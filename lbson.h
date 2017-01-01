@@ -24,7 +24,7 @@ bson_t *lbs_do_encode( lua_State *L,
     int index,int *array,struct error_collector *ec );
 
 int lbs_do_decode( lua_State *L,
-    const char *buffer,size_t sz,struct error_collector *ec );
+    const bson_t *doc,struct error_collector *ec );
 
 extern int luaopen_lua_bson( lua_State *L );
 
