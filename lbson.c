@@ -458,7 +458,7 @@ int lbs_do_decode( lua_State *L,
  * only number、table、boolean support.other type
  * will raise a error
  */
-bson_t *lbs_encode_stack( lua_State *L,
+bson_t *lbs_do_encode_stack( lua_State *L,
     int index,struct error_collector *ec )
 {
     int top = lua_gettop( L );
@@ -471,7 +471,7 @@ bson_t *lbs_encode_stack( lua_State *L,
 
     bson_t *doc = bson_new();
     char key[MAX_KEY_LENGTH] = { 0 };
-    for ( int i = index;i < top;i ++ )
+    for ( int i = index;i <= top;i ++ )
     {
         snprintf( key,MAX_KEY_LENGTH,"%d",i - index );
         if ( value_encode( L,doc,key,i,ec ) < 0 )
@@ -487,7 +487,7 @@ bson_t *lbs_encode_stack( lua_State *L,
 /* decode doc into lua stack
  * return the number of variable push into stack
  */
-int lbs_decode_stack( lua_State *L,
+int lbs_do_decode_stack( lua_State *L,
     const bson_t *doc,struct error_collector *ec )
 {
     bson_iter_t iter;
@@ -582,7 +582,6 @@ static int lbs_decode( lua_State *L )
 
     const bson_t *doc = bson_reader_read( reader,NULL );
 
-    bson_reader_destroy( reader );
     if ( !doc )
     {
         ERROR( (&ec),"invalid bson buffer" );
@@ -593,10 +592,12 @@ static int lbs_decode( lua_State *L )
     /* root type always be a document in bson */
     if ( lbs_do_decode( L,doc,BSON_TYPE_DOCUMENT,&ec ) >= 0 )
     {
+        bson_reader_destroy( reader );
         return 1;
     }
 
 ERROR:
+    bson_reader_destroy( reader );
     if ( !nothrow )
     {
         luaL_error( L,ec.what );
@@ -627,6 +628,78 @@ static int lbs_object_id( lua_State *L )
     return 1;
 }
 
+static int lbs_encode_stack( lua_State *L )
+{
+    struct error_collector ec;
+    ec.what[0] = 0;
+
+    int nothrow = lua_toboolean( L,1 );
+    bson_t *doc = lbs_do_encode_stack( L,2,&ec );
+    if ( doc )
+    {
+        const char *buffer = (const char *)bson_get_data( doc );
+        lua_pushlstring( L,buffer,doc->len );
+
+        bson_destroy( doc );
+
+        return 1;
+    }
+
+    if ( !nothrow )
+    {
+        luaL_error( L,ec.what );
+        return 0; /* in fact,it never return */
+    }
+
+    /* do not raise a error,return error message instead */
+    lua_pushnil( L ); /* fail,make sure buffer is nil */
+    lua_pushstring( L,ec.what );
+
+    return 1;
+}
+
+static int lbs_decode_stack( lua_State *L )
+{
+    struct error_collector ec;
+    ec.what[0] = 0;
+
+    int nothrow = lua_toboolean( L,2 );
+
+    size_t sz = 0;
+    const char *buffer = luaL_tolstring( L,1,&sz );
+
+    bson_reader_t *reader = bson_reader_new_from_data( (const uint8_t *)buffer,sz );
+
+    const bson_t *doc = bson_reader_read( reader,NULL );
+    if ( !doc )
+    {
+        ERROR( (&ec),"invalid bson buffer" );
+
+        goto ERROR;
+    }
+
+    int num = lbs_do_decode_stack( L,doc,&ec );
+    if ( num > 0 )
+    {
+        bson_reader_destroy( reader );
+        return num;
+    }
+
+ERROR:
+    bson_reader_destroy( reader );
+    if ( !nothrow )
+    {
+        luaL_error( L,ec.what );
+        return 0; /* in fact,it never return */
+    }
+
+    /* do not raise a error,return error message instead */
+    lua_pushnil( L ); /* fail,make sure buffer is nil */
+    lua_pushstring( L,ec.what );
+
+    return 2;
+}
+
 /* ====================LIBRARY INITIALISATION FUNCTION======================= */
 
 static const luaL_Reg lua_parson_lib[] =
@@ -634,6 +707,8 @@ static const luaL_Reg lua_parson_lib[] =
     {"encode", lbs_encode},
     {"decode", lbs_decode},
     {"object_id",lbs_object_id},
+    {"encode_stack",lbs_encode_stack},
+    {"decode_stack",lbs_decode_stack},
     {NULL, NULL}
 };
 

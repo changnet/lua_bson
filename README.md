@@ -29,9 +29,17 @@ tbl,error = decode( buffer,nothrow )
 
 -- generate a object id
 objectid = object_id()
+
+-- encode stack variable into a bson buffer
+buffer,error = encode_stack( nothrow,... )
+
+-- decode a bson buffer into stack
+... = decode_stack( nothrow,buffer )
 ```
 
-if success,error always be nil.
+If success,error always be nil.It raise a error if nothrow is false when error 
+occur.if nothrow is true,error is the error message and other return data is 
+invalid.
 
 Example
 -------

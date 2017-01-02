@@ -26,14 +26,14 @@ struct error_collector
 /* decode doc into lua stack
  * return the number of variable push into stack
  */
-int lbs_decode_stack( lua_State *L,
+int lbs_do_decode_stack( lua_State *L,
     const bson_t *doc,struct error_collector *ec );
 
 /* encode varibale in lua stack start from index
- * only number、table、boolean support.other type
+ * only number、table、boolean、string、nil support.other type
  * will raise a error
  */
-bson_t *lbs_encode_stack( lua_State *L,
+bson_t *lbs_do_encode_stack( lua_State *L,
     int index,struct error_collector *ec );
 
 bson_t *lbs_do_encode( lua_State *L,

@@ -74,3 +74,11 @@ local bf_buffer = bf:read( "a" ) -- some version maybe read("*all")
 vd( bson.decode(bf_buffer) )
 
 print( "a new object id:",bson.object_id() )
+
+local bf = bson.encode_stack( true,2,3,4,5,"sdfkasfjdskfksa",
+    998.77,nil,true,{ x = { 1,2,3,"hello",false} },false )
+
+local tbl = { bson.decode_stack( bf ) }
+for k,v in pairs( tbl ) do
+    vd( v )
+end
