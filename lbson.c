@@ -90,6 +90,9 @@ static inline int lua_isbit32(int64_t v)
     return v >= INT_MIN && v <= INT_MAX;
 }
 
+int bson_decode( lua_State*L,bson_iter_t *iter,
+    bson_type_t root_type,struct error_collector *ec );
+
 int value_encode( lua_State *L,bson_t *doc,
     const char *key,int index,struct error_collector *ec )
 {
@@ -148,6 +151,100 @@ int value_encode( lua_State *L,bson_t *doc,
     return 0;
 }
 
+int value_decode( lua_State*L,bson_iter_t *iter,struct error_collector *ec )
+{
+    switch ( bson_iter_type( iter ) )
+    {
+        case BSON_TYPE_DOUBLE    :
+        {
+            double val = bson_iter_double( iter );
+            lua_pushnumber( L,val );
+        }break;
+        case BSON_TYPE_DOCUMENT  :
+        {
+            bson_iter_t sub_iter;
+            if ( !bson_iter_recurse( iter, &sub_iter ) )
+            {
+                ERROR( ec,"bson document iter recurse error" );
+                return -1;
+            }
+            if ( bson_decode( L,&sub_iter,BSON_TYPE_DOCUMENT,ec ) < 0 )
+            {
+                return -1;
+            }
+        }break;
+        case BSON_TYPE_ARRAY     :
+        {
+            bson_iter_t sub_iter;
+            if ( !bson_iter_recurse( iter, &sub_iter ) )
+            {
+                ERROR( ec,"bson array iter recurse error" );
+                return -1;
+            }
+            if ( bson_decode( L,&sub_iter,BSON_TYPE_ARRAY,ec ) < 0 )
+            {
+                return -1;
+            }
+        }break;
+        case BSON_TYPE_BINARY    :
+        {
+            const char *val  = NULL;
+            unsigned int len = 0;
+            bson_iter_binary( iter,NULL,&len,(const uint8_t **)(&val) );
+            lua_pushlstring( L,val,len );
+        }break;
+        case BSON_TYPE_UTF8      :
+        {
+            unsigned int len = 0;
+            const char *val = bson_iter_utf8( iter,&len );
+            lua_pushlstring( L,val,len );
+        }break;
+        case BSON_TYPE_OID       :
+        {
+            const bson_oid_t *oid = bson_iter_oid ( iter );
+
+            char str[25];  /* bson api make it 25 */
+            bson_oid_to_string( oid, str );
+            lua_pushstring( L,str );
+        }break;
+        case BSON_TYPE_BOOL      :
+        {
+            bool val = bson_iter_bool( iter );
+            lua_pushboolean( L,val );
+        }break;
+        case BSON_TYPE_NULL      :
+        {
+            /* NULL == nil in lua */
+            lua_pushnil( L );
+        }break;
+        case BSON_TYPE_INT32     :
+        {
+            int val = bson_iter_int32( iter );
+            lua_pushinteger( L,val );
+        }break;
+        case BSON_TYPE_DATE_TIME :
+        {
+            /* A 64-bit integer containing the number of milliseconds since
+             * the UNIX epoch
+             */
+            int64_t val = bson_iter_date_time( iter );
+            lua_pushinteger( L,val );
+        }break;
+        case BSON_TYPE_INT64     :
+        {
+            int64_t val = bson_iter_int64( iter );
+            lua_pushinteger( L,val );
+        }break;
+        default :
+        {
+            ERROR( ec,"unknow bson type:%d",bson_iter_type( iter ) );
+            return -1;
+        }break;
+    }
+
+    return 0;
+}
+
 bson_t *lbs_do_encode( lua_State *L,
     int index,int *array,struct error_collector *ec )
 {
@@ -196,7 +293,7 @@ bson_t *lbs_do_encode( lua_State *L,
             lua_pushnil( L );
             while ( lua_next( L,index) != 0 )
             {
-                snprintf( key,MAX_KEY_LENGTH,"%d",cur_index );
+                snprintf( key,MAX_KEY_LENGTH,"%d",cur_index++ );
                 if ( value_encode( L,doc,key,stack_top + 2,ec ) < 0 )
                 {
                     lua_pop( L,2 );
@@ -230,9 +327,11 @@ bson_t *lbs_do_encode( lua_State *L,
                 case LUA_TNUMBER  :
                 {
                     if ( lua_isinteger( L,-2 ) )
-                        snprintf( key,MAX_KEY_LENGTH,LUA_INTEGER_FMT,lua_tointeger( L,-2 ) );
+                        snprintf( key,MAX_KEY_LENGTH,
+                            LUA_INTEGER_FMT,lua_tointeger( L,-2 ) );
                     else
-                        snprintf( key,MAX_KEY_LENGTH,LUA_NUMBER_FMT,lua_tonumber( L,-2 ) );
+                        snprintf( key,MAX_KEY_LENGTH,
+                            LUA_NUMBER_FMT,lua_tonumber( L,-2 ) );
                     pkey = key;
                 }break;
                 case LUA_TSTRING :
@@ -318,101 +417,18 @@ int bson_decode( lua_State*L,bson_iter_t *iter,
     while ( bson_iter_next( iter ) )
     {
         const char *key = bson_iter_key( iter );
-        /* don't call bson_iter_type with root document */
-        switch ( bson_iter_type( iter ) )
+        if ( value_decode( L,iter,ec ) < 0 )
         {
-            case BSON_TYPE_DOUBLE    :
-            {
-                double val = bson_iter_double( iter );
-                lua_pushnumber( L,val );
-            }break;
-            case BSON_TYPE_DOCUMENT  :
-            {
-                bson_iter_t sub_iter;
-                if ( !bson_iter_recurse( iter, &sub_iter ) )
-                {
-                    ERROR( ec,"bson document iter recurse error" );
-                    lua_pop( L,1 );return -1;
-                }
-                if ( bson_decode( L,&sub_iter,BSON_TYPE_DOCUMENT,ec ) < 0 )
-                {
-                    lua_pop( L,1 );return -1;
-                }
-            }break;
-            case BSON_TYPE_ARRAY     :
-            {
-                bson_iter_t sub_iter;
-                if ( !bson_iter_recurse( iter, &sub_iter ) )
-                {
-                    ERROR( ec,"bson array iter recurse error" );
-                    lua_pop( L,1 );return -1;
-                }
-                if ( bson_decode( L,&sub_iter,BSON_TYPE_ARRAY,ec ) < 0 )
-                {
-                    lua_pop( L,1 );return -1;
-                }
-            }break;
-            case BSON_TYPE_BINARY    :
-            {
-                const char *val  = NULL;
-                unsigned int len = 0;
-                bson_iter_binary( iter,NULL,&len,(const uint8_t **)(&val) );
-                lua_pushlstring( L,val,len );
-            }break;
-            case BSON_TYPE_UTF8      :
-            {
-                unsigned int len = 0;
-                const char *val = bson_iter_utf8( iter,&len );
-                lua_pushlstring( L,val,len );
-            }break;
-            case BSON_TYPE_OID       :
-            {
-                const bson_oid_t *oid = bson_iter_oid ( iter );
-
-                char str[25];  /* bson api make it 25 */
-                bson_oid_to_string( oid, str );
-                lua_pushstring( L,str );
-            }break;
-            case BSON_TYPE_BOOL      :
-            {
-                bool val = bson_iter_bool( iter );
-                lua_pushboolean( L,val );
-            }break;
-            case BSON_TYPE_NULL      :
-                /* NULL == nil in lua */
-                continue;
-                break;
-            case BSON_TYPE_INT32     :
-            {
-                int val = bson_iter_int32( iter );
-                lua_pushinteger( L,val );
-            }break;
-            case BSON_TYPE_DATE_TIME :
-            {
-                /* A 64-bit integer containing the number of milliseconds since
-                 * the UNIX epoch
-                 */
-                int64_t val = bson_iter_date_time( iter );
-                lua_pushinteger( L,val );
-            }break;
-            case BSON_TYPE_INT64     :
-            {
-                int64_t val = bson_iter_int64( iter );
-                lua_pushinteger( L,val );
-            }break;
-            default :
-            {
-                ERROR( ec,"unknow bson type:%d",bson_iter_type( iter ) );
-                lua_pop( L,1 );return -1;
-            }break;
+            lua_pop( L,1 );
+            return      -1;
         }
 
         if ( BSON_TYPE_ARRAY == root_type )
         {
             /* lua array index start from 1
-             * lua_rawseti:Array Manipulation
+             * lua_rawseti will set nil value in a sparse array
              */
-            lua_rawseti( L,-2,strtol(key,NULL,10) + 1 );
+            lua_seti( L,-2,strtol(key,NULL,10) + 1 );
         }
         else
         {
@@ -423,7 +439,6 @@ int bson_decode( lua_State*L,bson_iter_t *iter,
 
     return 0;
 }
-
 
 int lbs_do_decode( lua_State *L,
     const bson_t *doc,bson_type_t root_type,struct error_collector *ec )
@@ -437,6 +452,73 @@ int lbs_do_decode( lua_State *L,
     }
 
     return bson_decode( L,&iter,root_type,ec );
+}
+
+/* encode varibale in lua stack start from index
+ * only number、table、boolean support.other type
+ * will raise a error
+ */
+bson_t *lbs_encode_stack( lua_State *L,
+    int index,struct error_collector *ec )
+{
+    int top = lua_gettop( L );
+    if ( index > top )
+    {
+        ERROR( ec,"nothing in stack to be encoded" );
+
+        return NULL;
+    }
+
+    bson_t *doc = bson_new();
+    char key[MAX_KEY_LENGTH] = { 0 };
+    for ( int i = index;i < top;i ++ )
+    {
+        snprintf( key,MAX_KEY_LENGTH,"%d",i - index );
+        if ( value_encode( L,doc,key,i,ec ) < 0 )
+        {
+            bson_destroy( doc );
+            return         NULL;
+        }
+    }
+
+    return doc;
+}
+
+/* decode doc into lua stack
+ * return the number of variable push into stack
+ */
+int lbs_decode_stack( lua_State *L,
+    const bson_t *doc,struct error_collector *ec )
+{
+    bson_iter_t iter;
+    if ( !bson_iter_init( &iter, doc ) )
+    {
+        ERROR( ec,"invalid bson document" );
+
+       return -1;
+    }
+
+    int cnt = 0;
+    int top = lua_gettop( L );
+    while ( bson_iter_next( &iter ) )
+    {
+        if ( cnt + top > MAX_LUA_STACK || !lua_checkstack( L,1 ) )
+        {
+            lua_settop( L,top );
+            ERROR( ec,"lbs_decode_stack stack overflow" );
+            return -1;
+        }
+
+        if ( value_decode( L,&iter,ec ) < 0 )
+        {
+            lua_settop( L,top );
+            return      -1;
+        }
+
+        ++cnt;
+    }
+
+    return cnt;
 }
 
 /* encode lua table into a bson buffer */

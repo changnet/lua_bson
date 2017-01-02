@@ -56,7 +56,7 @@ test_data.employees =
     { firstName = "Thomas" , lastName = "Carter" }
 }
 
-test_data.sparse = { [10] = "number ten" }
+test_data.sparse = { [6] = "number six",[10] = "number ten" }
 test_data.empty_array = set_array( {},true )
 test_data.empty_object = set_array( {},false )
 test_data.force_array  = set_array( { phone1 = "123456789",phone2 = "987654321" },true )
