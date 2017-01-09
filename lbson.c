@@ -655,7 +655,7 @@ static int lbs_encode_stack( lua_State *L )
     lua_pushnil( L ); /* fail,make sure buffer is nil */
     lua_pushstring( L,ec.what );
 
-    return 1;
+    return 2;
 }
 
 static int lbs_decode_stack( lua_State *L )
