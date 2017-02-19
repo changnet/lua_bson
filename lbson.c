@@ -470,10 +470,11 @@ int lbs_do_encode_stack( lua_State *L,
         return -1;
     }
 
+    unsigned int key_index = bson_count_keys( doc );
     char key[MAX_KEY_LENGTH] = { 0 };
     for ( int i = index;i <= top;i ++ )
     {
-        snprintf( key,MAX_KEY_LENGTH,"%d",i - index );
+        snprintf( key,MAX_KEY_LENGTH,"%u",key_index++ );
         if ( value_encode( L,doc,key,i,ec ) < 0 )
         {
             return -1;
