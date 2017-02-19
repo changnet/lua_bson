@@ -585,6 +585,7 @@ static int lbs_decode( lua_State *L )
     {
         ERROR( (&ec),"invalid bson buffer" );
 
+        bson_reader_destroy( reader );
         goto ERROR;
     }
 
@@ -596,7 +597,6 @@ static int lbs_decode( lua_State *L )
     }
 
 ERROR:
-    bson_reader_destroy( reader );
     if ( !nothrow )
     {
         luaL_error( L,ec.what );
