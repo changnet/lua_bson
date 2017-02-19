@@ -458,30 +458,29 @@ int lbs_do_decode( lua_State *L,
  * only number、table、boolean support.other type
  * will raise a error
  */
-bson_t *lbs_do_encode_stack( lua_State *L,
-    int index,struct error_collector *ec )
+int lbs_do_encode_stack( lua_State *L,
+    bson_t *doc,int index,struct error_collector *ec )
 {
+    assert( doc );
     int top = lua_gettop( L );
     if ( index > top )
     {
         ERROR( ec,"nothing in stack to be encoded" );
 
-        return NULL;
+        return -1;
     }
 
-    bson_t *doc = bson_new();
     char key[MAX_KEY_LENGTH] = { 0 };
     for ( int i = index;i <= top;i ++ )
     {
         snprintf( key,MAX_KEY_LENGTH,"%d",i - index );
         if ( value_encode( L,doc,key,i,ec ) < 0 )
         {
-            bson_destroy( doc );
-            return         NULL;
+            return -1;
         }
     }
 
-    return doc;
+    return 0;
 }
 
 /* decode doc into lua stack
@@ -634,16 +633,17 @@ static int lbs_encode_stack( lua_State *L )
     ec.what[0] = 0;
 
     int nothrow = lua_toboolean( L,1 );
-    bson_t *doc = lbs_do_encode_stack( L,2,&ec );
-    if ( doc )
+    bson_t *doc = bson_new();
+    int err = lbs_do_encode_stack( L,doc,2,&ec );
+    if (  0 == err )
     {
         const char *buffer = (const char *)bson_get_data( doc );
         lua_pushlstring( L,buffer,doc->len );
-
-        bson_destroy( doc );
-
-        return 1;
     }
+
+    bson_destroy( doc );
+
+    if ( 0 == err ) return 1;
 
     if ( !nothrow )
     {

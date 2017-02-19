@@ -33,8 +33,8 @@ int lbs_do_decode_stack( lua_State *L,
  * only number、table、boolean、string、nil support.other type
  * will raise a error
  */
-bson_t *lbs_do_encode_stack( lua_State *L,
-    int index,struct error_collector *ec );
+int lbs_do_encode_stack( lua_State *L,
+    bson_t *doc,int index,struct error_collector *ec );
 
 bson_t *lbs_do_encode( lua_State *L,
     int index,int *array,struct error_collector *ec );
