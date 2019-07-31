@@ -7,7 +7,7 @@ https://github.com/mongodb/libbson
 Installation
 ------------
 
- * Make sure lua develop environment already installed
+ * Make sure lua(5.3.4) and libbson(1.14.0) develop environment already installed
  * git clone https://github.com/changnet/lua_bson.git
  * cd lua_bson
  * make
