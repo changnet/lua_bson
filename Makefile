@@ -11,9 +11,13 @@ CFLAGS =            -O2 -std=gnu99 -Wall -pedantic #-DNDEBUG
 LUA_BSON_CFLAGS =      -fpic
 LUA_BSON_LDFLAGS =     -shared
 
-LUA_BSON_DEPS = -I$(PREFIX)/include $(shell pkg-config --cflags --libs libbson-1.0)
+# some os make not have pkg-config
+# LUA_BSON_DEPS = -I$(PREFIX)/include $(shell pkg-config --cflags --libs libbson-1.0)
 
-AR= ar rcu
+#/usr/local/include/libbson-1.0/bson/bson.h
+LUA_BSON_DEPS = -I$(PREFIX)/include/libbson-1.0 -lbson-1.0
+
+AR= ar rc
 RANLIB= ranlib
 
 SHAREDDIR = .sharedlib
