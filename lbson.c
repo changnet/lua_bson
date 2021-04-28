@@ -572,7 +572,7 @@ static int lbs_decode( lua_State *L )
     {
         snprintf( ec.what,LBS_MAX_ERROR_MSG,"argument #1 string expected,got %s",
                     lua_typename( L,lua_type(L,1) ) );
-        goto ERROR;
+        goto DONE_ERROR;
     }
 
     size_t sz = 0;
@@ -587,7 +587,7 @@ static int lbs_decode( lua_State *L )
         ERROR_LOG( (&ec),"invalid bson buffer" );
 
         bson_reader_destroy( reader );
-        goto ERROR;
+        goto DONE_ERROR;
     }
 
     /* root type always be a document in bson */
@@ -597,7 +597,7 @@ static int lbs_decode( lua_State *L )
         return 1;
     }
 
-ERROR:
+DONE_ERROR:
     if ( !nothrow )
     {
         luaL_error( L,ec.what );
@@ -618,12 +618,11 @@ static int lbs_object_id( lua_State *L )
 
     bson_oid_init( &oid, NULL );
 
-    const int sz = 25;
-    char str[sz];
+    char str[25];
 
     bson_oid_to_string( &oid, str );
 
-    lua_pushlstring( L,str,sz );
+    lua_pushlstring( L,str, sizeof(str) );
 
     return 1;
 }
