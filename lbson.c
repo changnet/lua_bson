@@ -9,7 +9,7 @@
 #define MAX_ARRAY_INDEX INT_MAX
 #define ARRAY_KEY       "__array"
 
-#define ERROR(ector,...)    \
+#define ERROR_LOG(ector,...)    \
     do{snprintf( ector->what,LBS_MAX_ERROR_MSG,__VA_ARGS__ );}while(0)
 
 
@@ -142,7 +142,7 @@ int value_encode( lua_State *L,bson_t *doc,
         }break;
         default :
         {
-            ERROR( ec,"value_encode can not convert %s to bson value\n",
+            ERROR_LOG( ec,"value_encode can not convert %s to bson value\n",
                 lua_typename(L,ty) );
             return -1;
         }break;
@@ -165,7 +165,7 @@ int value_decode( lua_State*L,bson_iter_t *iter,struct error_collector *ec )
             bson_iter_t sub_iter;
             if ( !bson_iter_recurse( iter, &sub_iter ) )
             {
-                ERROR( ec,"bson document iter recurse error" );
+                ERROR_LOG( ec,"bson document iter recurse error" );
                 return -1;
             }
             if ( bson_decode( L,&sub_iter,BSON_TYPE_DOCUMENT,ec ) < 0 )
@@ -178,7 +178,7 @@ int value_decode( lua_State*L,bson_iter_t *iter,struct error_collector *ec )
             bson_iter_t sub_iter;
             if ( !bson_iter_recurse( iter, &sub_iter ) )
             {
-                ERROR( ec,"bson array iter recurse error" );
+                ERROR_LOG( ec,"bson array iter recurse error" );
                 return -1;
             }
             if ( bson_decode( L,&sub_iter,BSON_TYPE_ARRAY,ec ) < 0 )
@@ -237,7 +237,7 @@ int value_decode( lua_State*L,bson_iter_t *iter,struct error_collector *ec )
         }break;
         default :
         {
-            ERROR( ec,"unknow bson type:%d",bson_iter_type( iter ) );
+            ERROR_LOG( ec,"unknow bson type:%d",bson_iter_type( iter ) );
             return -1;
         }break;
     }
@@ -251,7 +251,7 @@ bson_t *lbs_do_encode( lua_State *L,
     /* need 2 pos to iterate lua table */
     if ( lua_gettop( L ) > MAX_LUA_STACK || !lua_checkstack( L,2 ) )
     {
-        ERROR( ec,"stack overflow" );
+        ERROR_LOG( ec,"stack overflow" );
         return NULL;
     }
 
@@ -342,7 +342,7 @@ bson_t *lbs_do_encode( lua_State *L,
                     {
                         bson_destroy( doc );
                         lua_pop( L,2 );
-                        ERROR( ec,"lua table string key too long\n" );
+                        ERROR_LOG( ec,"lua table string key too long\n" );
                         return NULL;
                     }
                 }break;
@@ -350,7 +350,7 @@ bson_t *lbs_do_encode( lua_State *L,
                 {
                     bson_destroy( doc );
                     lua_pop( L,2 );
-                    ERROR( ec,"can not convert %s to bson key\n",
+                    ERROR_LOG( ec,"can not convert %s to bson key\n",
                         lua_typename( L,lua_type( L,-2 ) ) );
                     return NULL;
                 }break;
@@ -409,7 +409,7 @@ int bson_decode( lua_State*L,bson_iter_t *iter,
 {
     if ( lua_gettop(L) > MAX_LUA_STACK || !lua_checkstack(L,3) )
     {
-        ERROR( ec,"bson_decode stack overflow" );
+        ERROR_LOG( ec,"bson_decode stack overflow" );
         return -1;
     }
 
@@ -446,7 +446,7 @@ int lbs_do_decode( lua_State *L,
     bson_iter_t iter;
     if ( !bson_iter_init( &iter, doc ) )
     {
-        ERROR( ec,"invalid bson document" );
+        ERROR_LOG( ec,"invalid bson document" );
 
        return -1;
     }
@@ -465,7 +465,7 @@ int lbs_do_encode_stack( lua_State *L,
     int top = lua_gettop( L );
     if ( index > top )
     {
-        ERROR( ec,"nothing in stack to be encoded" );
+        ERROR_LOG( ec,"nothing in stack to be encoded" );
 
         return -1;
     }
@@ -493,7 +493,7 @@ int lbs_do_decode_stack( lua_State *L,
     bson_iter_t iter;
     if ( !bson_iter_init( &iter, doc ) )
     {
-        ERROR( ec,"invalid bson document" );
+        ERROR_LOG( ec,"invalid bson document" );
 
        return -1;
     }
@@ -505,7 +505,7 @@ int lbs_do_decode_stack( lua_State *L,
         if ( cnt + top > MAX_LUA_STACK || !lua_checkstack( L,1 ) )
         {
             lua_settop( L,top );
-            ERROR( ec,"lbs_decode_stack stack overflow" );
+            ERROR_LOG( ec,"lbs_decode_stack stack overflow" );
             return -1;
         }
 
@@ -584,7 +584,7 @@ static int lbs_decode( lua_State *L )
 
     if ( !doc )
     {
-        ERROR( (&ec),"invalid bson buffer" );
+        ERROR_LOG( (&ec),"invalid bson buffer" );
 
         bson_reader_destroy( reader );
         goto ERROR;
@@ -674,9 +674,9 @@ static int lbs_decode_stack( lua_State *L )
     const bson_t *doc = bson_reader_read( reader,NULL );
     if ( !doc )
     {
-        ERROR( (&ec),"invalid bson buffer" );
+        ERROR_LOG( (&ec),"invalid bson buffer" );
 
-        goto ERROR;
+        goto DONE_ERROR;
     }
 
     int num = lbs_do_decode_stack( L,doc,&ec );
@@ -686,7 +686,7 @@ static int lbs_decode_stack( lua_State *L )
         return num;
     }
 
-ERROR:
+DONE_ERROR:
     bson_reader_destroy( reader );
     if ( !nothrow )
     {

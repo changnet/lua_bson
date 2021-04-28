@@ -55,4 +55,4 @@ test:
 	lua test.lua
 
 clean:
-	rm -f -R *.o ./writer $(TARGET_SO) $(TARGET_A) $(STATICDIR) $(SHAREDDIR)
+	rm -f -R *.o test.bson ./writer $(TARGET_SO) $(TARGET_A) $(STATICDIR) $(SHAREDDIR)
