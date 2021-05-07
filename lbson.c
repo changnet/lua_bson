@@ -113,9 +113,9 @@ int value_encode( lua_State *L,bson_t *doc,
             if ( lua_isinteger( L,index ) )
             {
                 /* int32 or int64 */
-                int64_t val = lua_tointeger( L,index );
+                lua_Integer val = lua_tointeger( L,index );
                 if ( lua_isbit32( val ) )
-                    BSON_APPEND_INT32( doc,key,val );
+                    BSON_APPEND_INT32( doc,key,(int)val );
                 else
                     BSON_APPEND_INT64( doc,key,val );
             }
